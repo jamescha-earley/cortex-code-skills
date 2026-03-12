@@ -639,7 +639,8 @@ def main():
         f"--no-auto-update "
         f'--session-name "{SESSION_NAME}" '
         f"--allowed-tools {allowed_tools_str} "
-        f"--disallowed-tools {disallowed_tools_str}"
+        f"--disallowed-tools {disallowed_tools_str} "
+        f"--auto-accept-plans"
     )
 
     # Start cortex in a detached tmux session
