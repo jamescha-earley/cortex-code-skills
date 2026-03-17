@@ -1,6 +1,6 @@
 ---
 name: change-agent-connection
-description: "Switch the active Snowflake agent connection. Use when: user wants to change which Snowflake account the agent uses, switch the agent's connection, or point the agent at a different environment. Does NOT handle SQL-level connection objects (CREATE CONNECTION). Triggers: change agent connection, switch agent connection, agent connection, change cortex connection, switch cortex connection, use a different account, change active connection."
+description: "Switch the active Snowflake agent connection. Use when: user wants to change which Snowflake account the Cortex Code agent uses, switch the agent's connection, or point the agent at a different environment. Does NOT handle SQL-level connection objects (CREATE CONNECTION) or general account switching. Triggers: change agent connection, switch agent connection, cortex agent connection, cortexAgentConnectionName, agent connection name."
 ---
 
 # Change Agent Connection
