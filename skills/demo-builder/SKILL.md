@@ -24,13 +24,15 @@ which tmux && which ffmpeg && which cortex && python3 -c "import yaml"
 
 If any are missing, install them automatically (brew/pip) or inform the user if manual steps are needed (e.g., cortex CLI install, granting Screen Recording permission to Terminal.app).
 
-**Also:** The demo recording script is at `scripts/cortex_demo.py` within this skill directory. Run it directly from there using its absolute path -- no need to copy it. All output files (MP4, prompts YAML, setup scripts) are written to the current working directory.
+**Also:** The demo launcher script is at `scripts/cortex_demo.py` within this skill directory. Run it directly from there using its absolute path -- no need to copy it. All output files (MP4, prompts YAML, setup scripts) are written to the current working directory.
 
 The script path is: `<SKILL_DIR>/scripts/cortex_demo.py` (e.g., `~/.snowflake/cortex/skills/demo-builder/scripts/cortex_demo.py`).
 
+The script is a **thin launcher** with subcommands (`launch`, `stop`, `capture`, `type`, `send`, `status`, `prompts`). It handles tmux session management, Terminal.app window positioning, and ffmpeg recording. **You (Cortex Code) drive the actual demo** -- you capture the pane, read it, reason about screen state, and decide when to type, wait, or respond to interactive prompts. See Step 5 for the full drive loop.
+
 ---
 
-Build a complete automated demo for `cortex_demo.py` -- the screen-recording demo script. This skill walks through an interactive wizard, then generates:
+Build a complete automated demo using the demo launcher script. This skill walks through an interactive wizard, then generates:
 
 - **`./cortex_demo_prompts.yaml`** -- Prompts file for the demo script
 - **`./cortex_demo_setup.sql`** -- SQL to create all Snowflake objects (database, schema, tables, stages, etc.)
@@ -219,7 +221,7 @@ Files created:
 
 ## Step 5: Run the Demo
 
-**Goal:** Offer to launch the demo recording immediately.
+**Goal:** Offer to launch the demo recording, then drive it yourself.
 
 **Action:** Use `ask_user_question`:
 
@@ -228,33 +230,133 @@ Everything is set up. Want me to run the demo now?
 ```
 
 Options:
-- Record MP4 (runs cortex_demo.py with screen recording)
-- Dry run without recording (runs with --no-record to test prompts first)
+- Record MP4 (launches cortex in tmux, records screen via ffmpeg)
+- Dry run without recording (test prompts first, no video)
 - No, I'll run it later
-
-If the user chooses to run:
-
-1. **Record MP4**: Run via Bash (background mode):
-   ```bash
-   python3 <SKILL_DIR>/scripts/cortex_demo.py 2>&1
-   ```
-   Opens Terminal.app, launches cortex, types all prompts, records to `./cortex_demo.mp4`.
-
-2. **Dry run**: Run via Bash (background mode):
-   ```bash
-   python3 <SKILL_DIR>/scripts/cortex_demo.py --no-record 2>&1
-   ```
-   Same flow, no recording. Good for testing prompt quality first.
-
-After the run completes, report the result:
-- If MP4 recorded: show file size/path, suggest `open ./cortex_demo.mp4`
-- If dry run: report whether all prompts completed
 
 If the user declines:
 ```
-To record:    python3 <SKILL_DIR>/scripts/cortex_demo.py
-To dry run:   python3 <SKILL_DIR>/scripts/cortex_demo.py --no-record
+To run later, use the demo launcher script:
+  python3 <SKILL_DIR>/scripts/cortex_demo.py launch           # with recording
+  python3 <SKILL_DIR>/scripts/cortex_demo.py launch --no-record  # dry run
 ```
+
+If the user chooses to run, **you drive the demo yourself** using the launcher script as a thin helper for tmux/ffmpeg management. The script (`<SKILL_DIR>/scripts/cortex_demo.py`) provides these subcommands:
+
+| Command | What it does |
+|---------|-------------|
+| `launch [--no-record]` | Start tmux+cortex, open Terminal.app, start ffmpeg. Prints JSON status. |
+| `stop` | Stop ffmpeg, close Terminal, kill tmux. Prints JSON with MP4 path/size. |
+| `capture` | Print current tmux pane content (ANSI-stripped). |
+| `type "text"` | Type text char-by-char with human-like speed, then press Enter. |
+| `send <key> [key...]` | Send raw tmux keys (e.g., `Enter`, `Space`, `1`, `C-c`). |
+| `status` | Print JSON: session alive, recording state. |
+| `prompts [file]` | Load YAML prompts file, print as JSON. |
+
+### 5a. Launch the Session
+
+Run the launcher via Bash (NOT background mode -- it exits after setup):
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py launch 2>&1
+```
+Or for dry run:
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py launch --no-record 2>&1
+```
+
+This starts cortex in tmux, waits for connection, opens Terminal.app, and starts ffmpeg recording. It prints a JSON status line when ready.
+
+### 5b. Load the Prompts
+
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py prompts ./cortex_demo_prompts.yaml
+```
+
+This prints the prompts as JSON. Parse them into your list.
+
+### 5c. Drive the Demo (The Core Loop)
+
+For each prompt, follow this exact sequence:
+
+#### 1. Type the prompt
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py type "What tables do we have in CORTEX_DEMO_HEALTHCARE.DEMO?"
+```
+
+#### 2. Wait, then start polling
+Wait 5 seconds after typing, then enter a polling loop. Every 3-5 seconds, capture the pane:
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py capture
+```
+
+#### 3. Read the capture and decide what to do
+
+Read the captured pane content using the Read tool (capture prints to a temp file or stdout). Analyze what you see:
+
+**Still processing?** Look for these signs:
+- "esc to interrupt" visible anywhere on screen → cortex is actively working, keep waiting
+- Content is changing between captures → still outputting, keep waiting
+- Streaming text appearing → keep waiting
+
+**Interactive prompt?** Look for these UI elements:
+- **Radio buttons**: Lines with `❯` or `›` cursor and `○`/`●` circle markers → Send `Enter` to accept the highlighted option:
+  ```bash
+  python3 <SKILL_DIR>/scripts/cortex_demo.py send Enter
+  ```
+- **Numbered options**: Short lines like `1. Yes`, `2. No` at the bottom of the screen → Send `1` to pick the first option:
+  ```bash
+  python3 <SKILL_DIR>/scripts/cortex_demo.py send 1
+  ```
+- **Checkbox selection**: Lines with `◻`/`◼`/`☐`/`☑` markers → Send `Space` then `Enter`:
+  ```bash
+  python3 <SKILL_DIR>/scripts/cortex_demo.py send Space
+  ```
+  Wait 0.5s, then:
+  ```bash
+  python3 <SKILL_DIR>/scripts/cortex_demo.py send Enter
+  ```
+- **Free-text question** (e.g., "What would you like to name it?"): Use your judgment to type a reasonable answer:
+  ```bash
+  python3 <SKILL_DIR>/scripts/cortex_demo.py type "customer_dashboard"
+  ```
+
+**Done?** The response is complete when ALL of these are true:
+- The input bar is visible: "Type your message" OR "auto-accept" text is on screen
+- "esc to interrupt" is NOT on screen
+- Content has been stable for 2+ captures in a row
+- At least 10 seconds have elapsed since typing the prompt
+
+**Error?** If you see an error message on screen:
+- Read it, understand it, decide if the demo can continue
+- If it's recoverable (e.g., object not found), you can type a corrective prompt
+- If it's fatal, stop the demo early
+
+#### 4. Pause between prompts
+After a response completes, wait 5 seconds so a viewer can read the output before typing the next prompt.
+
+#### 5. Repeat for all prompts
+
+### 5d. Stop the Session
+
+After all prompts are done (or if you need to stop early), wait 5 seconds for the viewer to see the final output, then:
+```bash
+python3 <SKILL_DIR>/scripts/cortex_demo.py stop 2>&1
+```
+
+This stops ffmpeg, closes Terminal.app, and kills the tmux session. It prints JSON with the MP4 path and file size.
+
+Report the result to the user:
+- If MP4 recorded: show file path/size, suggest `open ./cortex_demo.mp4`
+- If dry run: report that all prompts completed successfully
+
+### Important Drive Loop Notes
+
+- **Do NOT send Escape** -- it interrupts cortex mid-response
+- **Be patient** -- some responses take 30-60+ seconds. Keep polling.
+- **Stable means stable** -- wait for at least 2 consecutive identical captures before deciding a response is done
+- **Interactive prompts need stability too** -- wait for 2 stable captures before responding to avoid reacting to partial renders
+- **The input bar text varies**: With `--auto-accept-plans`, it shows "Plans will be auto accepted (/auto-accept-plan-off to disable)" instead of "Type your message". Both mean cortex is ready for input. Check for either "Type your message" or "auto-accept" in the pane content.
+- **"esc to interrupt" is the key signal** -- if it's visible, cortex is definitely still working, regardless of what else is on screen
 
 ---
 
