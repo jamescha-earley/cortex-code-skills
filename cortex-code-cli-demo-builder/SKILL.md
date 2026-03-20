@@ -1,5 +1,5 @@
 ---
-name: demo-builder
+name: cortex-code-cli-demo-builder
 description: "Build automated Cortex Code demo recordings end-to-end. Walks through an interactive wizard to plan a demo scenario, synthesizes realistic sample data (tables, documents, stages) in Snowflake, generates a YAML prompts file, then launches a real cortex session in tmux that types each prompt with human-like speed, auto-accepts permissions, waits for responses, and records the terminal as an MP4 via ffmpeg screen capture. Produces three artifacts: cortex_demo_prompts.yaml (the demo script), cortex_demo_setup.sql (idempotent Snowflake setup), and cortex_demo_setup.py (data synthesis). Use when: user wants to create a demo, build a demo, generate demo prompts, set up a demo environment, prepare a demo, create sample data for a demo, synthesize demo data, build a showcase, create a walkthrough, generate a cortex demo, or record a demo video. Triggers: demo builder, build demo, create demo, demo prompts, demo yaml, demo setup, synthesize data, demo data, showcase, walkthrough, cortex demo, record demo, demo video, demo recording, demo mp4."
 ---
 
