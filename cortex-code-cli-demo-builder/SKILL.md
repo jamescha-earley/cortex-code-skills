@@ -237,7 +237,7 @@ If the user chooses to run, **you drive the demo yourself** using the launcher s
 
 | Command | What it does |
 |---------|-------------|
-| `launch [--no-record]` | Start tmux+cortex, open Terminal.app, start ffmpeg. Prints JSON status. |
+| `launch [--no-record] [--prompts file]` | Start tmux+cortex, open Terminal.app, start ffmpeg. With `--prompts`, MP4 is named from the YAML header comment. Prints JSON status. |
 | `stop` | Stop ffmpeg, close Terminal, kill tmux. Prints JSON with MP4 path/size. |
 | `capture` | Print current tmux pane content (ANSI-stripped). |
 | `type "text"` | Type text char-by-char with human-like speed, then press Enter. |
@@ -247,13 +247,13 @@ If the user chooses to run, **you drive the demo yourself** using the launcher s
 
 ### 5a. Launch the Session
 
-Run the launcher via Bash (NOT background mode -- it exits after setup):
+Run the launcher via Bash (NOT background mode -- it exits after setup). **Always pass `--prompts`** so the MP4 gets a descriptive filename derived from the YAML header comment:
 ```bash
-python3 <SKILL_DIR>/scripts/cortex_demo.py launch 2>&1
+python3 <SKILL_DIR>/scripts/cortex_demo.py launch --prompts ./cortex_demo_prompts.yaml 2>&1
 ```
 Or for dry run:
 ```bash
-python3 <SKILL_DIR>/scripts/cortex_demo.py launch --no-record 2>&1
+python3 <SKILL_DIR>/scripts/cortex_demo.py launch --no-record --prompts ./cortex_demo_prompts.yaml 2>&1
 ```
 
 This starts cortex in tmux, waits for connection, opens Terminal.app, and starts ffmpeg recording. It prints a JSON status line when ready.
