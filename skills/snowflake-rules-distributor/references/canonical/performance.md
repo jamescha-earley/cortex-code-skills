@@ -19,6 +19,8 @@ ALTER TABLE large_events CLUSTER BY (event_date, region);
 Diagnostics:
 ```sql
 SELECT SYSTEM$CLUSTERING_INFORMATION('my_table', '(event_date, region)');
+-- average_depth close to total_partition_count = no effective pruning
+-- average_depth << total_partition_count = good pruning
 -- Look for: average_overlaps (lower is better), average_depth (lower is better)
 ```
 
@@ -75,9 +77,29 @@ ORDER BY execution_time DESC LIMIT 20;
 
 Key metrics:
 - **Partitions scanned vs total**: low ratio = good pruning
-- **Bytes spilled to local/remote**: warehouse too small
+- **Bytes spilled to local/remote**: warehouse too small (scale up)
 - **Compilation time**: simplify query or break into CTEs
 - **Queue time**: increase warehouse size or use multi-cluster
+
+### Operator-Level Analysis
+
+```sql
+SELECT * FROM TABLE(GET_QUERY_OPERATOR_STATS('<QUERY_ID>'));
+```
+
+### Common Query Insight Fix Strategies
+
+| Insight | Fix |
+|---------|-----|
+| `NO_FILTER_ON_TOP_OF_TABLE_SCAN` | Add WHERE clause or partition pruning |
+| `INAPPLICABLE_FILTER` | Filter doesn't match clustering — recluster or restructure |
+| `UNSELECTIVE_FILTER` | Filter matches too many rows — add more specific conditions |
+| `LIKE_WITH_LEADING_WILDCARD` | Use Search Optimization Service instead |
+| `INEFFICIENT_AGGREGATE` | Remove redundant GROUP BY columns |
+| `EXPLODING_JOIN` | Fix join condition — likely missing or wrong key |
+| `UNNECESSARY_UNION_DISTINCT` | Switch to UNION ALL if duplicates are acceptable |
+| `REMOTE_SPILLAGE` | Warehouse too small — scale up |
+| `QUEUED_OVERLOAD` | Too many concurrent queries — use dedicated warehouse or multi-cluster |
 
 ## Cost Analysis
 
@@ -104,6 +126,22 @@ ALTER WAREHOUSE etl_wh SET RESOURCE_MONITOR = etl_monitor;
 ### Token Cost Estimation (Cortex AI)
 
 ```sql
+-- Estimate before running
 SELECT SUM(AI_COUNT_TOKENS('claude-4-sonnet', review_text)) AS total_tokens
 FROM reviews;
+
+-- Track actual usage
+SELECT function_name, SUM(tokens) AS total_tokens, SUM(token_credits) AS total_credits
+FROM SNOWFLAKE.ACCOUNT_USAGE.CORTEX_FUNCTIONS_USAGE_HISTORY
+WHERE start_time > DATEADD('day', -30, CURRENT_TIMESTAMP())
+GROUP BY function_name ORDER BY total_credits DESC;
+```
+
+### Budget Class Instances
+
+Budgets are class instances, not standard objects:
+
+```sql
+-- View budgets (NOT "SHOW BUDGETS")
+SHOW SNOWFLAKE.CORE.BUDGET INSTANCES IN ACCOUNT;
 ```

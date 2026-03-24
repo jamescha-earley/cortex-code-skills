@@ -3,15 +3,21 @@
 Cross-cutting rules that apply across all Snowflake development.
 
 ## Cortex AI
-- Do NOT use old function names (COMPLETE, CLASSIFY_TEXT, EXTRACT_ANSWER, etc.) — use AI_* versions.
+- Do NOT use old function names (COMPLETE, CLASSIFY_TEXT, EXTRACT_ANSWER, PARSE_DOCUMENT, SUMMARIZE, TRANSLATE, SENTIMENT, EMBED_TEXT_768) — use AI_* versions.
 - Do NOT use AI_COMPLETE for simple classification — use AI_CLASSIFY (purpose-built, cheaper).
 - Do NOT pass entire tables through AI_COMPLETE row-by-row without checking cost via AI_COUNT_TOKENS first.
 - Do NOT hardcode model names without considering regional availability.
+- Do NOT concatenate stage path and filename in TO_FILE — they are SEPARATE arguments: `TO_FILE('@stage', 'file.pdf')` not `TO_FILE('@stage/file.pdf')`.
+- Do NOT use the folder path from LIST/DIRECTORY output as the filename arg — strip to just the filename or use `SPLIT_PART(relative_path, '/', -1)`.
 
 ## Data Pipelines
 - Do NOT use Streams+Tasks for simple transformations that Dynamic Tables can handle.
 - Do NOT set TARGET_LAG shorter than needed — directly impacts cost.
 - Do NOT forget `ALTER TASK ... RESUME` after creation — tasks start suspended.
+- Do NOT use `SELECT *` in Dynamic Table definitions — schema changes on the source will break refreshes. Use explicit column lists.
+- Do NOT create an INCREMENTAL Dynamic Table downstream of a FULL refresh DT — this will error.
+- Do NOT disable change tracking on a base table after a DT depends on it — refreshes will fail.
+- Do NOT put a View between two Dynamic Tables — DT → View → DT dependencies are not supported.
 
 ## Snowpark Python
 - Do NOT use `collect()` on large DataFrames — process server-side.
@@ -53,9 +59,17 @@ Cross-cutting rules that apply across all Snowflake development.
 ### Dynamic Table Debugging
 
 ```sql
-SELECT * FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
-    NAME => 'my_db.my_schema.my_dt'))
-ORDER BY data_timestamp DESC LIMIT 10;
+-- Health check for all DTs in schema
+SELECT name, scheduling_state, last_completed_refresh_state,
+    refresh_mode, time_within_target_lag_ratio
+FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLES())
+ORDER BY name;
+
+-- Refresh history with errors
+SELECT name, state, state_message, refresh_action
+FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
+    NAME_PREFIX => 'my_db.my_schema', ERROR_ONLY => TRUE))
+ORDER BY refresh_start_time DESC LIMIT 10;
 ```
 
 ### Stream/Pipe Health

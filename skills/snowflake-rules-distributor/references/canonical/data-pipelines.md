@@ -11,6 +11,18 @@
 
 **End-to-end pattern**: Snowpipe → Dynamic Table chain (simplest pipeline).
 
+**Dynamic Tables are the default choice.** Only use Streams+Tasks when a specific blocker prevents DT usage:
+
+| Blocker | Why DTs Can't Handle It |
+|---------|------------------------|
+| Append-only stream semantics | DTs track all changes, can't isolate inserts only (check IMMUTABLE WHERE first) |
+| External/directory table sources | Not supported as DT sources |
+| Sub-minute latency | DT minimum TARGET_LAG is 1 minute |
+| DT → View → DT dependency | View cannot sit between two DTs |
+| Procedural logic (IF/ELSE, loops) | DTs are declarative SELECT only |
+| Side effects (API calls, notifications) | DTs cannot call external functions |
+| Write to multiple targets from one source | One DT = one target table |
+
 ## Dynamic Tables
 
 Declarative, auto-refreshing transformations. Chain them for multi-step pipelines.
@@ -41,7 +53,24 @@ CREATE OR REPLACE DYNAMIC TABLE user_sessions
 - `REFRESH_MODE`: AUTO (default), FULL, or INCREMENTAL.
 - Manage: `ALTER DYNAMIC TABLE ... SET TARGET_LAG / REFRESH / SUSPEND / RESUME`.
 
-**Design tip**: Set TARGET_LAG progressively — tighter at the top (data freshness), looser at the bottom (cost efficiency).
+**Design tip**: Set TARGET_LAG progressively — tighter at the top (data freshness), looser at the bottom (cost efficiency). Use `TARGET_LAG = DOWNSTREAM` for intermediate DTs in a chain.
+
+### Important Constraints
+
+- **Incremental DTs cannot depend on Full refresh DTs** — a downstream INCREMENTAL DT will error if its upstream is FULL.
+- **Target lag cannot be shorter than upstream's** — downstream freshness is bounded by upstream.
+- **`SELECT *` fails on schema changes** — if the source table adds a column, DT refresh breaks. Always use explicit column lists.
+- **Change tracking must stay enabled** — disabling change tracking on a base table after DT creation breaks refreshes.
+- **IMMUTABLE WHERE restrictions** — no subqueries, no UDFs, no non-deterministic functions (except timestamps like `CURRENT_TIMESTAMP()`).
+
+```sql
+-- IMMUTABLE WHERE — prune data for incremental efficiency
+CREATE DYNAMIC TABLE recent_events
+    TARGET_LAG = '5 minutes'
+    WAREHOUSE = transform_wh
+    IMMUTABLE WHERE (created_at < CURRENT_TIMESTAMP() - INTERVAL '7 days')
+    AS SELECT event_id, event_type, user_id FROM raw_events;
+```
 
 ## Streams and Tasks
 
