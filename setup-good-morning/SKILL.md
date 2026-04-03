@@ -1,13 +1,13 @@
 ---
 name: setup-good-morning
-description: "Set up the good-morning daily briefing skill from scratch. Walks through Google Workspace MCP installation, optional Slack MCP, Snowflake storage setup, and Google Doc tracking configuration. Use when: user wants to set up good morning, create a daily briefing, configure morning briefing, install good morning skill. Triggers: setup good morning, install good morning, create briefing, setup daily briefing, configure morning briefing, setup-good-morning."
+description: "Set up the good-morning daily briefing skill from scratch. Walks through Google Workspace MCP installation, Snowflake storage setup, and Google Doc tracking configuration. Use when: user wants to set up good morning, create a daily briefing, configure morning briefing, install good morning skill. Triggers: setup good morning, install good morning, create briefing, setup daily briefing, configure morning briefing, setup-good-morning."
 ---
 
 # Setup Good Morning — Daily Briefing Wizard
 
-Interactive wizard that sets up the `good-morning` daily briefing skill. Handles all prerequisites: Google Workspace MCP, optional Slack MCP, optional Snowflake snapshot storage, and tracked Google Docs.
+Interactive wizard that sets up the `good-morning` daily briefing skill. Handles all prerequisites: Google Workspace MCP, optional Snowflake snapshot storage, and tracked Google Docs.
 
-After setup, the user can run `$good-morning` each day for a calendar timeline, email triage, Slack highlights, and optionally Google Doc change summaries.
+After setup, the user can run `$good-morning` each day for a calendar timeline, email triage, and optionally Google Doc change summaries.
 
 ---
 
@@ -16,9 +16,8 @@ After setup, the user can run `$good-morning` each day for a calendar timeline, 
 The good-morning skill requires:
 
 1. **Google Workspace MCP** — for reading calendar events, emails, and Google Docs
-2. **(Optional) Slack MCP** — for surfacing DMs and mentions in the briefing
-3. **(Optional) A Snowflake connection** — for storing document snapshots (enables doc change tracking across sessions)
-4. **(Optional) Google Doc IDs** — the docs to track for daily diffs (requires #3)
+2. **(Optional) A Snowflake connection** — for storing document snapshots (enables doc change tracking across sessions)
+3. **(Optional) Google Doc IDs** — the docs to track for daily diffs (requires #2)
 
 This wizard walks through all of them.
 
@@ -128,94 +127,7 @@ Tell the user they need to restart Cortex Code after MCP setup for the tools to 
 
 ---
 
-## Step 2: Slack MCP (Optional)
-
-**Goal:** Ask if the user wants Slack highlights in their briefing. If yes, add the Slack MCP server.
-
-Ask using `ask_user_question`:
-
-```
-Do you want Slack highlights (DMs and mentions) in your morning briefing?
-This connects to Slack via the official Slack MCP server. You'll authenticate with your own Slack account.
-```
-
-Options:
-- **Yes, add Slack** — adds Slack MCP and enables DM/mention summaries
-- **No, skip Slack** — briefing will not include Slack (can add later)
-
-### If the user says NO:
-
-Set `slack_enabled = false`. Skip to Step 3.
-
-### If the user says YES:
-
-#### 2a. Check for Existing Slack MCP
-
-Read `~/.snowflake/cortex/mcp.json` and check if a `slack` entry already exists.
-
-**If it exists:**
-- Report: "Slack MCP is already configured." Move to Step 3.
-
-**If it does NOT exist:**
-
-#### 2b. Add Slack MCP Entry
-
-The Slack MCP server requires a registered Slack app. The user needs to either:
-- Use an existing Slack app that has MCP access enabled, or
-- Create a new one at https://api.slack.com/apps
-
-Tell the user:
-
-```
-The Slack MCP server requires a Slack app with MCP access enabled.
-
-1. Go to https://api.slack.com/apps
-2. Create a new app (or use an existing one)
-3. Under "OAuth & Permissions", add these User Token Scopes:
-   search:read.public, search:read.private, search:read.mpim, search:read.im,
-   search:read.files, search:read.users, chat:write,
-   channels:history, groups:history, mpim:history, im:history,
-   canvases:read, canvases:write, users:read, users:read.email
-4. Under "Agents & Assistants", enable MCP server access
-5. Note your app's client_id
-```
-
-**STOP**: Wait for the user to provide their Slack app `client_id`.
-
-Then add the following entry to the `mcpServers` object in `~/.snowflake/cortex/mcp.json`, replacing `{SLACK_CLIENT_ID}` with the user's value:
-
-```json
-"slack": {
-  "transport": "http",
-  "url": "https://mcp.slack.com/mcp",
-  "oauth": {
-    "client_id": "{SLACK_CLIENT_ID}",
-    "scope": "search:read.public search:read.private search:read.mpim search:read.im search:read.files search:read.users chat:write channels:history groups:history mpim:history im:history canvases:read canvases:write users:read users:read.email"
-  }
-}
-```
-
-Use the Edit tool to merge this into the existing `mcp.json`.
-
-#### 2c. Authenticate
-
-Tell the user:
-
-```
-Slack MCP has been added to your config. After this wizard finishes (or if you restart Cortex Code now),
-the first time a Slack tool is used, your browser will open for OAuth consent.
-
-Sign in with your Slack account and authorize the app. No secrets or tokens to manage — it's all handled
-automatically via OAuth.
-```
-
-**Note:** The Slack MCP uses per-user OAuth. The `client_id` is a public app identifier — no `client_secret` is needed. Tokens are stored locally at `~/.snowflake/cortex/mcp_oauth/` and auto-refreshed by Cortex Code.
-
-Tell the user they'll need to restart Cortex Code (or run `/mcp`) for the Slack MCP to connect. The OAuth flow happens on first use of any Slack tool.
-
----
-
-## Step 3: Configure Email Triage
+## Step 2: Configure Email Triage
 
 **Goal:** Set the user's company email domain so the briefing can classify internal vs external emails.
 
@@ -232,7 +144,7 @@ Store this for the config. Default classification rules:
 
 ---
 
-## Step 4: Google Doc Tracking (Optional)
+## Step 3: Google Doc Tracking (Optional)
 
 **Goal:** Ask if the user wants doc change tracking, and if so, set up storage and collect doc URLs.
 
@@ -250,11 +162,11 @@ Options:
 
 ### If the user says NO:
 
-Set `doc_tracking_enabled = false`. Skip to Step 5. The generated good-morning skill will only include Phase 1 (Calendar), Phase 2 (Email Triage), and optionally Phase 3 (Slack).
+Set `doc_tracking_enabled = false`. Skip to Step 4. The generated good-morning skill will only include Phase 1 (Calendar) and Phase 2 (Email Triage).
 
 ### If the user says YES:
 
-#### 4a. Choose Snowflake Connection and Storage
+#### 3a. Choose Snowflake Connection and Storage
 
 Run:
 ```bash
@@ -270,7 +182,7 @@ Which database and schema should good-morning use for storing doc snapshots?
 (e.g., MY_DB.PUBLIC — the skill will create one small table there)
 ```
 
-#### 4b. Create the Snapshot Table
+#### 3b. Create the Snapshot Table
 
 Run against the chosen connection:
 
@@ -290,7 +202,7 @@ Verify it was created:
 DESCRIBE TABLE {DB}.{SCHEMA}.GOOD_MORNING_DOC_SNAPSHOTS;
 ```
 
-#### 4c. Add Tracked Google Docs
+#### 3c. Add Tracked Google Docs
 
 Ask:
 
@@ -326,17 +238,17 @@ If the user doesn't have any docs to track yet, that's fine — they can add doc
 
 ---
 
-## Step 5: Write the Good Morning Skill
+## Step 4: Write the Good Morning Skill
 
 **Goal:** Create the `good-morning` skill directory with SKILL.md and config.yaml.
 
-### 5a. Create the Directory
+### 4a. Create the Directory
 
 ```bash
 mkdir -p ~/.snowflake/cortex/skills/good-morning
 ```
 
-### 5b. Write config.yaml
+### 4b. Write config.yaml
 
 Write `~/.snowflake/cortex/skills/good-morning/config.yaml`.
 
@@ -386,15 +298,13 @@ email:
 #     url: "https://docs.google.com/document/d/<id>/edit"
 ```
 
-### 5c. Write SKILL.md
+### 4c. Write SKILL.md
 
 Write `~/.snowflake/cortex/skills/good-morning/SKILL.md` with the full good-morning skill content.
 
-**If doc tracking is enabled**, include all 5 phases (Calendar, Email, Slack, Doc Diffs, Summary).
+**If doc tracking is enabled**, include all phases (Calendar, Email, Doc Diffs, Summary).
 
-**If doc tracking is disabled**, include Phase 1 (Calendar), Phase 2 (Email Triage), optionally Phase 3 (Slack if enabled), and Summary. Omit all doc diff logic, the snapshot table bootstrap, and any references to Snowflake storage.
-
-**If Slack is enabled**, include Phase 3 (Slack Highlights) which checks for DMs and mentions from the last 24 hours. The phase should gracefully skip if Slack MCP tools are not available (e.g., user hasn't authenticated yet).
+**If doc tracking is disabled**, include Phase 1 (Calendar), Phase 2 (Email Triage), and Summary. Omit all doc diff logic, the snapshot table bootstrap, and any references to Snowflake storage.
 
 The generated SKILL.md must use the following structure. Replace all placeholders with actual values — no placeholders should remain in the final file.
 
@@ -415,16 +325,15 @@ The body should include:
 3. **First Run: Bootstrap Storage** — CREATE TABLE IF NOT EXISTS for the snapshot table (only if doc tracking enabled)
 4. **Phase 1: Calendar** — Fetch today's events via `list_events`, present as a scannable timeline. Flag overlaps with warning emoji. Note free blocks longer than 1 hour. Highlight the marquee event (fewest attendees that user organized, or any event with `[LIVE]` in the title).
 5. **Phase 2: Email Triage** — Fetch unread emails via `list_emails` with `label_ids: ["INBOX", "UNREAD"]`. Split into Actionable (from @{DOMAIN}, direct messages, GitHub notifications, service tickets) and Skip (promotional, newsletters, external automated digests). Show actionable as a numbered list with sender, subject, and 1-line snippet. Show skip count only.
-6. **Phase 3: Slack Highlights** (only if Slack enabled) — Pre-check: only run if Slack MCP tools are available, skip silently otherwise. Search for DMs from the last 24 hours, group by conversation. Search for mentions, show top 5 with channel name and snippet. Present as a compact section.
-7. **Phase 4: Google Doc Diffs** (only if doc tracking enabled) — For each tracked doc: read current content via `read_document`, compute SHA-256 hash (first 64 hex chars), check last snapshot in Snowflake, compare hashes. If no previous snapshot, store baseline. If hash matches, report no changes. If hash differs, summarize changes in 3-8 bullet points (new sections, action items, status changes, new names/dates). Always store new snapshot via INSERT. Escape single quotes in content. Truncate if over 16MB.
-8. **Phase 5: Summary Card** — Compact summary with meeting count, conflict flag, actionable/skipped email counts, Slack DM/mention counts (or "not connected" if skipped), docs checked/changed counts.
-9. **Stopping Points** — None, runs end-to-end.
-10. **Configuration** — How to add/remove tracked docs by editing config.yaml. Snapshot cleanup SQL.
-11. **Output** — List what the skill produces.
+6. **Phase 3: Google Doc Diffs** (only if doc tracking enabled) — For each tracked doc: read current content via `read_document`, compute SHA-256 hash (first 64 hex chars), check last snapshot in Snowflake, compare hashes. If no previous snapshot, store baseline. If hash matches, report no changes. If hash differs, summarize changes in 3-8 bullet points (new sections, action items, status changes, new names/dates). Always store new snapshot via INSERT. Escape single quotes in content. Truncate if over 16MB.
+7. **Phase 4: Summary Card** — Compact summary with meeting count, conflict flag, actionable/skipped email counts, docs checked/changed counts.
+8. **Stopping Points** — None, runs end-to-end.
+9. **Configuration** — How to add/remove tracked docs by editing config.yaml. Snapshot cleanup SQL.
+10. **Output** — List what the skill produces.
 
 ---
 
-## Step 6: Test Run
+## Step 5: Test Run
 
 **Goal:** Verify the skill works end-to-end.
 
@@ -438,19 +347,17 @@ Run each phase as a verification:
 
 1. Fetch today's calendar events via `list_events` — verify it returns data
 2. Fetch unread emails via `list_emails` — verify it returns data
-3. If Slack enabled: search for recent DMs via Slack MCP — verify it connects (note: if user hasn't restarted CoCo yet, this may fail — that's expected, just note it)
-4. If doc tracking enabled: read each tracked Google Doc via `read_document` — verify each succeeds
-5. If doc tracking enabled: store initial snapshots in Snowflake — verify inserts succeed
+3. If doc tracking enabled: read each tracked Google Doc via `read_document` — verify each succeeds
+4. If doc tracking enabled: store initial snapshots in Snowflake — verify inserts succeed
 
 If any phase fails, diagnose and fix:
 - Calendar/email failures → Google Workspace MCP issue, check mcp.json and restart
-- Slack failures → check mcp.json has the `slack` entry, restart CoCo, complete OAuth in browser
 - Doc read failures → check doc ID, verify sharing permissions (doc must be accessible to the authenticated Google account)
 - Snapshot storage failures → check Snowflake connection and table permissions
 
 ---
 
-## Step 7: Summary
+## Step 6: Summary
 
 Show the setup summary:
 
@@ -458,7 +365,6 @@ Show the setup summary:
 === Good Morning Setup Complete ===
 
 Google Workspace MCP: connected
-Slack MCP:            {connected/skipped}
 Email domain:         {DOMAIN}
 Doc tracking:         {enabled/disabled}
 {If enabled:}
@@ -482,11 +388,10 @@ To schedule automatic morning briefings, use:
 
 - **After Step 1:** If Google Workspace MCP fails to install or the user needs to restart Cortex Code
 - **After Step 1a.3:** Wait for user to provide OAuth credentials
-- **After Step 2:** Wait for user decision on Slack
-- **After Step 4:** Wait for user decision on doc tracking
-- **After Step 4c:** Wait for user to provide doc URLs and confirm the list
-- **After Step 5:** Confirm the generated config before proceeding to test
-- **After Step 6:** Report test results
+- **After Step 3:** Wait for user decision on doc tracking
+- **After Step 3c:** Wait for user to provide doc URLs and confirm the list
+- **After Step 4:** Confirm the generated config before proceeding to test
+- **After Step 5:** Report test results
 
 ---
 
@@ -496,4 +401,3 @@ To schedule automatic morning briefings, use:
 - `~/.snowflake/cortex/skills/good-morning/config.yaml` — user-specific configuration
 - (If doc tracking enabled) `{DB}.{SCHEMA}.GOOD_MORNING_DOC_SNAPSHOTS` — Snowflake table for doc change tracking
 - Google Workspace MCP installed and verified (if not already present)
-- (If Slack enabled) Slack MCP configured in `mcp.json` (OAuth on first use)
